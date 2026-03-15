@@ -1,0 +1,48 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: jdbc:postgresql://aws-0-us-west-2.pooler.supabase.com:6543/postgres?pgbouncer=true
+    username: postgres.vzraezosyxezbtoozzkn
+    password: m4nz4n4c4nd3l4r1491!!
+    driver-class-name: org.postgresql.Driver
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 3000ms
+
+app:
+  tables:
+    names:
+      - employee
+      - company
+      - position
+      - department
+      - system_user
+
+  queue:
+    max-size-per-table: 1000
+    flush-interval-ms: 300000
+
+  cache:
+    key-prefix: appcache
+    searchable-fields:
+      employee:
+        - code
+        - name
+        - phone
+      company:
+        - name
+      position:
+        - name
+      department:
+        - name
+      system_user:
+        - name
+
+logging:
+  level:
+    root: INFO
