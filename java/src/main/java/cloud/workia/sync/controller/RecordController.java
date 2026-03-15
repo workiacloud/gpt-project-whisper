@@ -3,11 +3,11 @@ package cloud.workia.sync.controller;
 import cloud.workia.sync.model.ChangeRequest;
 import cloud.workia.sync.model.ChangeResponse;
 import cloud.workia.sync.model.OperationType;
+import cloud.workia.sync.model.PagedResponse;
 import cloud.workia.sync.model.RecordDetailResponse;
 import cloud.workia.sync.model.RecordListItemResponse;
 import cloud.workia.sync.service.QueryService;
 import cloud.workia.sync.service.TransactionQueueService;
-import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -27,12 +27,19 @@ public class RecordController {
     }
 
     @GetMapping("/{tableName}")
-    public ResponseEntity<List<RecordListItemResponse>> getAll(@PathVariable String tableName) {
-        return ResponseEntity.ok(queryService.findAll(tableName));
+    public ResponseEntity<PagedResponse<RecordListItemResponse>> getAll(
+            @PathVariable String tableName,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size
+    ) {
+        return ResponseEntity.ok(queryService.findAll(tableName, page, size));
     }
 
     @GetMapping("/{tableName}/{id}")
-    public ResponseEntity<RecordDetailResponse> getById(@PathVariable String tableName, @PathVariable Long id) {
+    public ResponseEntity<RecordDetailResponse> getById(
+            @PathVariable String tableName,
+            @PathVariable Long id
+    ) {
         RecordDetailResponse record = queryService.findById(tableName, id);
         if (record == null) {
             return ResponseEntity.notFound().build();
@@ -41,12 +48,14 @@ public class RecordController {
     }
 
     @GetMapping("/{tableName}/search")
-    public ResponseEntity<List<RecordListItemResponse>> searchByField(
+    public ResponseEntity<PagedResponse<RecordListItemResponse>> searchByField(
             @PathVariable String tableName,
             @RequestParam String field,
-            @RequestParam String value
+            @RequestParam String value,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size
     ) {
-        return ResponseEntity.ok(queryService.findByFieldValue(tableName, field, value));
+        return ResponseEntity.ok(queryService.findByFieldValue(tableName, field, value, page, size));
     }
 
     @PostMapping("/{tableName}/insert")
@@ -84,7 +93,6 @@ public class RecordController {
         request.setWhoId(whoId);
         request.setExpectedVersion(expectedVersion);
         request.setOperationType(OperationType.DELETE);
-
         transactionQueueService.enqueue(request);
         return ResponseEntity.ok(buildResponse(request));
     }

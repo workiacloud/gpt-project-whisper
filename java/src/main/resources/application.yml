@@ -3,9 +3,9 @@ server:
 
 spring:
   datasource:
-    url: jdbc:postgresql://aws-0-us-west-2.pooler.supabase.com:6543/postgres?pgbouncer=true
-    username: postgres.vzraezosyxezbtoozzkn
-    password: m4nz4n4c4nd3l4r1491!!
+    url: 
+    username: 
+    password:
     driver-class-name: org.postgresql.Driver
 
   data:
