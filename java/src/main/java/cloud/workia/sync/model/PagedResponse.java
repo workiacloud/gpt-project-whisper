@@ -7,7 +7,7 @@ public class PagedResponse<T> {
     private List<T> items;
     private int page;
     private int size;
-    private long totalElements;
+    private long totalItems;
     private int totalPages;
     private boolean hasNext;
     private boolean hasPrevious;
@@ -19,15 +19,18 @@ public class PagedResponse<T> {
             List<T> items,
             int page,
             int size,
-            long totalElements
+            long totalItems,
+            int totalPages,
+            boolean hasNext,
+            boolean hasPrevious
     ) {
         this.items = items;
         this.page = page;
         this.size = size;
-        this.totalElements = totalElements;
-        this.totalPages = size <= 0 ? 0 : (int) Math.ceil((double) totalElements / (double) size);
-        this.hasNext = page + 1 < totalPages;
-        this.hasPrevious = page > 0;
+        this.totalItems = totalItems;
+        this.totalPages = totalPages;
+        this.hasNext = hasNext;
+        this.hasPrevious = hasPrevious;
     }
 
     public List<T> getItems() {
@@ -54,12 +57,12 @@ public class PagedResponse<T> {
         this.size = size;
     }
 
-    public long getTotalElements() {
-        return totalElements;
+    public long getTotalItems() {
+        return totalItems;
     }
 
-    public void setTotalElements(long totalElements) {
-        this.totalElements = totalElements;
+    public void setTotalItems(long totalItems) {
+        this.totalItems = totalItems;
     }
 
     public int getTotalPages() {

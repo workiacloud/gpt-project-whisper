@@ -4,11 +4,10 @@ import cloud.workia.sync.model.RecordView;
 import cloud.workia.sync.model.TableMeta;
 import cloud.workia.sync.properties.AppProperties;
 import jakarta.annotation.PostConstruct;
-import org.springframework.stereotype.Service;
-
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.stereotype.Service;
 
 @Service
 public class BootstrapService {
@@ -52,31 +51,28 @@ public class BootstrapService {
             List<Map<String, Object>> rows = supabaseService.loadTableRecords(tableName);
             for (Map<String, Object> row : rows) {
                 Long id = ((Number) row.get("id")).longValue();
-                Integer status = ((Number) row.get("status")).intValue();
-
                 @SuppressWarnings("unchecked")
                 Map<String, Object> metadata = (Map<String, Object>) row.get("metadata");
 
-                if (!isVisible(status)) {
+                if (!isVisible(metadata)) {
                     continue;
                 }
 
                 ensureAuditsStructure(metadata, tableMeta);
                 cacheService.saveRawRecord(tableName, id, metadata);
 
-                RecordView resolved = referenceResolverService.buildResolvedView(
-                        tableName,
-                        id,
-                        metadata,
-                        tableMeta
-                );
+                RecordView resolved = referenceResolverService.buildResolvedView(tableName, id, metadata, tableMeta);
                 cacheService.saveResolvedRecord(tableName, id, resolved);
             }
         }
     }
 
-    private boolean isVisible(Integer status) {
-        return status == null || status == 1;
+    private boolean isVisible(Map<String, Object> metadata) {
+        Object status = metadata.get("status");
+        if (status == null) {
+            return true;
+        }
+        return "1".equals(String.valueOf(status));
     }
 
     private void ensureAuditsStructure(Map<String, Object> metadata, TableMeta tableMeta) {

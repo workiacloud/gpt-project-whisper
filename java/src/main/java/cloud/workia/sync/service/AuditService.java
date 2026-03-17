@@ -2,11 +2,10 @@ package cloud.workia.sync.service;
 
 import cloud.workia.sync.model.OperationType;
 import cloud.workia.sync.model.PendingOperation;
-import org.springframework.stereotype.Service;
-
 import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import org.springframework.stereotype.Service;
 
 @Service
 public class AuditService {
@@ -42,6 +41,10 @@ public class AuditService {
                 continue;
             }
 
+            if (operation.getOperationType() == OperationType.DELETE && !"status".equals(field)) {
+                continue;
+            }
+
             Long auditId = supabaseService.nextAuditId();
             supabaseService.insertAuditRecord(
                     auditId,
@@ -59,36 +62,7 @@ public class AuditService {
             auditIdsByField.put(field, auditId);
         }
 
-        if (statusChanged(operation)) {
-            Long auditId = supabaseService.nextAuditId();
-            supabaseService.insertAuditRecord(
-                    auditId,
-                    now,
-                    who,
-                    operation.getWhoId(),
-                    operation.getOperationType().getEventName(),
-                    operation.getOperationType().getEventId(),
-                    operation.getTableName(),
-                    "status",
-                    stringify(operation.getBeforeStatus()),
-                    stringify(operation.getAfterStatus()),
-                    now.getYear()
-            );
-            auditIdsByField.put("status", auditId);
-        }
-
         return auditIdsByField;
-    }
-
-    private boolean statusChanged(PendingOperation operation) {
-        Integer before = operation.getBeforeStatus();
-        Integer after = operation.getAfterStatus();
-
-        if (operation.getOperationType() == OperationType.INSERT) {
-            return after != null;
-        }
-
-        return !stringify(before).equals(stringify(after));
     }
 
     private boolean valuesEqual(Object a, Object b) {

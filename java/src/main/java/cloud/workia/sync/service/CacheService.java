@@ -42,7 +42,6 @@ public class CacheService {
         if (json == null) {
             return null;
         }
-
         try {
             return objectMapper.readValue(json, TableMeta.class);
         } catch (JsonProcessingException e) {
@@ -55,7 +54,7 @@ public class CacheService {
 
     public void saveRawRecord(String tableName, Long id, Map<String, Object> rawMetadata) {
         writeJson(rawKey(tableName, id), rawMetadata);
-        redisTemplate.opsForZSet().add(activeIdsKey(tableName), String.valueOf(id), id.doubleValue());
+        redisTemplate.opsForSet().add(activeIdsKey(tableName), String.valueOf(id));
     }
 
     public void saveResolvedRecord(String tableName, Long id, RecordView recordView) {
@@ -66,7 +65,8 @@ public class CacheService {
         }
 
         writeJson(resolvedKey(tableName, id), recordView);
-        redisTemplate.opsForZSet().add(activeIdsKey(tableName), String.valueOf(id), id.doubleValue());
+        redisTemplate.opsForSet().add(activeIdsKey(tableName), String.valueOf(id));
+
         indexResolvedRecord(tableName, id, recordView);
         indexAutocompleteRecord(tableName, id, recordView);
     }
@@ -76,10 +76,8 @@ public class CacheService {
         if (json == null) {
             return null;
         }
-
         try {
-            return objectMapper.readValue(json, new TypeReference<>() {
-            });
+            return objectMapper.readValue(json, new TypeReference<>() {});
         } catch (JsonProcessingException e) {
             throw new IllegalStateException(
                     "Failed to deserialize raw record for table: " + tableName + ", id: " + id,
@@ -93,7 +91,6 @@ public class CacheService {
         if (json == null) {
             return null;
         }
-
         try {
             return objectMapper.readValue(json, RecordView.class);
         } catch (JsonProcessingException e) {
@@ -105,7 +102,7 @@ public class CacheService {
     }
 
     public List<RecordView> getAllResolvedRecords(String tableName) {
-        Set<String> ids = redisTemplate.opsForZSet().range(activeIdsKey(tableName), 0, -1);
+        Set<String> ids = redisTemplate.opsForSet().members(activeIdsKey(tableName));
         if (ids == null || ids.isEmpty()) {
             return Collections.emptyList();
         }
@@ -117,31 +114,32 @@ public class CacheService {
                 records.add(record);
             }
         }
+
+        records.sort(Comparator.comparing(RecordView::getId));
         return records;
+    }
+
+    public long countResolvedRecords(String tableName) {
+        Long size = redisTemplate.opsForSet().size(activeIdsKey(tableName));
+        return size == null ? 0L : size;
     }
 
     public List<RecordView> getResolvedRecordsPage(String tableName, int page, int size) {
-        long start = (long) page * size;
-        long end = start + size - 1;
-
-        Set<String> ids = redisTemplate.opsForZSet().range(activeIdsKey(tableName), start, end);
-        if (ids == null || ids.isEmpty()) {
+        List<RecordView> all = getAllResolvedRecords(tableName);
+        if (all.isEmpty()) {
             return Collections.emptyList();
         }
 
-        List<RecordView> records = new ArrayList<>();
-        for (String idValue : ids) {
-            RecordView record = getResolvedRecord(tableName, Long.valueOf(idValue));
-            if (record != null) {
-                records.add(record);
-            }
-        }
-        return records;
-    }
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.max(size, 1);
 
-    public long countActiveRecords(String tableName) {
-        Long count = redisTemplate.opsForZSet().zCard(activeIdsKey(tableName));
-        return count == null ? 0L : count;
+        int fromIndex = safePage * safeSize;
+        if (fromIndex >= all.size()) {
+            return Collections.emptyList();
+        }
+
+        int toIndex = Math.min(fromIndex + safeSize, all.size());
+        return all.subList(fromIndex, toIndex);
     }
 
     public List<RecordView> getResolvedRecordsByIndexedField(String tableName, String field, String value) {
@@ -150,58 +148,16 @@ public class CacheService {
             return Collections.emptyList();
         }
 
-        List<Long> sortedIds = ids.stream()
-                .map(Long::valueOf)
-                .sorted()
-                .toList();
-
         List<RecordView> results = new ArrayList<>();
-        for (Long id : sortedIds) {
-            RecordView record = getResolvedRecord(tableName, id);
+        for (String idValue : ids) {
+            RecordView record = getResolvedRecord(tableName, Long.valueOf(idValue));
             if (record != null) {
                 results.add(record);
             }
         }
+
+        results.sort(Comparator.comparing(RecordView::getId));
         return results;
-    }
-
-    public List<RecordView> getResolvedRecordsByIndexedFieldPage(
-            String tableName,
-            String field,
-            String value,
-            int page,
-            int size
-    ) {
-        Set<String> ids = redisTemplate.opsForSet().members(indexKey(tableName, field, value));
-        if (ids == null || ids.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        List<Long> sortedIds = ids.stream()
-                .map(Long::valueOf)
-                .sorted(Comparator.naturalOrder())
-                .toList();
-
-        int fromIndex = Math.min(page * size, sortedIds.size());
-        int toIndex = Math.min(fromIndex + size, sortedIds.size());
-
-        if (fromIndex >= toIndex) {
-            return Collections.emptyList();
-        }
-
-        List<RecordView> results = new ArrayList<>();
-        for (Long id : sortedIds.subList(fromIndex, toIndex)) {
-            RecordView record = getResolvedRecord(tableName, id);
-            if (record != null) {
-                results.add(record);
-            }
-        }
-        return results;
-    }
-
-    public long countResolvedRecordsByIndexedField(String tableName, String field, String value) {
-        Long count = redisTemplate.opsForSet().size(indexKey(tableName, field, value));
-        return count == null ? 0L : count;
     }
 
     public void removeRecord(String tableName, Long id) {
@@ -213,7 +169,7 @@ public class CacheService {
 
         redisTemplate.delete(rawKey(tableName, id));
         redisTemplate.delete(resolvedKey(tableName, id));
-        redisTemplate.opsForZSet().remove(activeIdsKey(tableName), String.valueOf(id));
+        redisTemplate.opsForSet().remove(activeIdsKey(tableName), String.valueOf(id));
     }
 
     public void saveQueue(String tableName, List<PendingOperation> operations) {
@@ -225,15 +181,10 @@ public class CacheService {
         if (json == null) {
             return new ArrayList<>();
         }
-
         try {
-            return objectMapper.readValue(json, new TypeReference<>() {
-            });
+            return objectMapper.readValue(json, new TypeReference<>() {});
         } catch (JsonProcessingException e) {
-            throw new IllegalStateException(
-                    "Failed to deserialize queue for table: " + tableName,
-                    e
-            );
+            throw new IllegalStateException("Failed to deserialize queue for table: " + tableName, e);
         }
     }
 

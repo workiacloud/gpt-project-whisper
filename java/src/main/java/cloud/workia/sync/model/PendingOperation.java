@@ -10,8 +10,6 @@ public class PendingOperation {
     private Long id;
     private Long whoId;
     private OperationType operationType;
-    private Integer beforeStatus;
-    private Integer afterStatus;
     private Map<String, Object> beforeRaw = new HashMap<>();
     private Map<String, Object> afterRaw = new HashMap<>();
     private Instant createdAt = Instant.now();
@@ -46,22 +44,6 @@ public class PendingOperation {
 
     public void setOperationType(OperationType operationType) {
         this.operationType = operationType;
-    }
-
-    public Integer getBeforeStatus() {
-        return beforeStatus;
-    }
-
-    public void setBeforeStatus(Integer beforeStatus) {
-        this.beforeStatus = beforeStatus;
-    }
-
-    public Integer getAfterStatus() {
-        return afterStatus;
-    }
-
-    public void setAfterStatus(Integer afterStatus) {
-        this.afterStatus = afterStatus;
     }
 
     public Map<String, Object> getBeforeRaw() {

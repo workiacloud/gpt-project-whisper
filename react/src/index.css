@@ -3,54 +3,61 @@ button, a, input, select, textarea, [role="button"] {
   transform: translate3d(0, 0, 0);
   backface-visibility: hidden;
 }
+
 button:active, a:active {
   transform: translate3d(0, 1px, 0);
 }
 
-/* App page background – two shape layers (same as download-app-one section) */
+/* App page background */
 .app-page-background {
   position: relative;
   min-height: 100vh;
   width: 100%;
-  background-color: #ececf0; /*#f4f5f9 was original color*/
-  isolation: isolate; /* stacking context so z-index layers work */
+  background-color: #ececf0;
+  isolation: isolate;
 }
+
 .app-page-background.night-mode {
   background-color: #121924;
 }
-/* Night mode: menu text white */
+
 .app-page-background.night-mode .main-menu .main-menu__list > li > a,
 .app-page-background.night-mode .main-menu .main-menu__list > li > a::after,
-.app-page-background.night-mode .main-menu .main-menu__list > li > ul li a {
+.app-page-background.night-mode .main-menu .main-menu__list > li > ul li a,
+.app-page-background.night-mode .page-wrapper main .container p,
+.app-page-background.night-mode .employees-title,
+.app-page-background.night-mode .employees-subtitle,
+.app-page-background.night-mode .employees-pagination__summary,
+.app-page-background.night-mode .employees-table td,
+.app-page-background.night-mode .employees-table th {
   color: #fff !important;
 }
+
 .app-page-background.night-mode .main-menu .main-menu__list > li:hover > a,
 .app-page-background.night-mode .main-menu .main-menu__list > li.current > a,
 .app-page-background.night-mode .main-menu .main-menu__list > li > ul li:hover a {
   color: var(--tanspot-base) !important;
 }
-/* Night mode: page placeholder legends ("Contenido próximamente.") */
-.app-page-background.night-mode .page-wrapper main .container p {
-  color: #fff !important;
-}
 
-/* Night mode switch in header */
 .main-menu__night-mode-switch {
   display: flex;
   align-items: center;
   margin-right: 16px;
 }
+
 .night-mode-toggle {
   display: inline-flex;
   align-items: center;
   cursor: pointer;
 }
+
 .night-mode-toggle input {
   position: absolute;
   opacity: 0;
   width: 0;
   height: 0;
 }
+
 .night-mode-slider {
   position: relative;
   display: inline-flex;
@@ -61,8 +68,9 @@ button:active, a:active {
   background: var(--tanspot-black);
   border-radius: 28px;
   transition: background 0.2s;
-  box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
 }
+
 .night-mode-slider::before {
   content: '';
   position: absolute;
@@ -72,21 +80,24 @@ button:active, a:active {
   background: #fff;
   border-radius: 50%;
   transition: transform 0.2s;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
+
 .night-mode-toggle input:checked + .night-mode-slider::before {
   transform: translateX(20px);
 }
+
 .night-mode-toggle input:checked + .night-mode-slider {
   background: var(--tanspot-base);
 }
+
 .night-mode-toggle .night-mode-icon {
   font-size: 14px;
   position: relative;
   z-index: 1;
   pointer-events: none;
 }
-/* Shape layers: full viewport, above base color, below content. !important overrides template. */
+
 .app-page-background .download-app-one__shape-bg,
 .app-page-background .download-app-one__shape-bg-two {
   position: absolute !important;
@@ -102,45 +113,48 @@ button:active, a:active {
   pointer-events: none !important;
   z-index: 0 !important;
 }
+
 .app-page-background .download-app-one__shape-bg {
   opacity: 0.7 !important;
 }
+
 .app-page-background .download-app-one__shape-bg-two {
   opacity: 0.85 !important;
 }
-/* Page content (login, layout) sits above the shape layers */
+
 .app-page-content {
   position: relative;
   z-index: 1;
   min-height: 100vh;
 }
 
-/* Captura table: no cell borders, rounded header corners */
 .captura-table table {
+  width: 100%;
   border-collapse: separate;
   border-spacing: 0;
 }
+
 .captura-table th,
 .captura-table td {
   border: none !important;
 }
+
 .captura-table thead tr:first-child th:first-child {
   border-top-left-radius: 8px;
 }
+
 .captura-table thead tr:first-child th:last-child {
   border-top-right-radius: 8px;
 }
+
 .captura-table tbody tr:nth-child(even) {
   background-color: #dddde0;
 }
+
 .captura-table tbody tr:nth-child(odd) {
   background-color: #fff;
 }
-.captura-table th:first-child,
-.captura-table td:first-child {
-  min-width: 120px;
-}
-/* Inputs: transparent background, no border, thin bottom border only when focused */
+
 .captura-table input {
   background: transparent !important;
   border: none !important;
@@ -150,58 +164,62 @@ button:active, a:active {
   border-bottom: 1px solid transparent;
   transition: border-bottom-color 0.15s ease;
 }
+
 .captura-table input:focus {
   border-bottom: 1px solid #fd5523 !important;
 }
+
 .captura-table input::placeholder {
   color: #aaa;
 }
 
-/* Login screen: login panel left, banner section right */
 .login-screen-layout {
   display: flex;
   min-height: 100vh;
   width: 100%;
 }
+
 .login-screen-panel {
   width: 380px;
   flex-shrink: 0;
   background-color: var(--tanspot-black);
   overflow-y: auto;
 }
+
 .employee-access-panel .sidebar-textwidget {
   padding: 48px 30px;
 }
+
 .employee-access-panel .content-inner {
   max-width: 100%;
 }
+
 .login-screen-banner-wrap {
   flex: 1;
   min-width: 0;
   overflow: hidden;
 }
+
 .login-screen-layout .login-screen-banner-wrap .banner-one.login-screen-banner {
   padding: 60px 24px 60px;
   min-height: 100%;
   display: flex;
   align-items: center;
 }
+
 .login-screen-layout .login-screen-banner-wrap .banner-one__title {
   font-size: clamp(28px, 4vw, 56px);
 }
+
 .login-screen-layout .login-screen-banner-wrap .banner-one__text {
   font-size: 15px;
 }
+
 .login-screen-layout .login-screen-banner-wrap .banner-one__img img {
   max-height: 50vh;
   width: auto;
 }
-/*
-.login-screen-layout .login-screen-banner-wrap .banner-one__shape-3 img {
-  max-width: 120px;
-}*/
 
-/* Login form centered, inputs 1/3 of screen width */
 .login-center-wrapper {
   display: flex !important;
   justify-content: center;
@@ -209,17 +227,171 @@ button:active, a:active {
   min-height: 100%;
   width: 100%;
 }
+
 .login-center-box {
   width: 33.333vw;
   max-width: 100%;
   min-width: 280px;
 }
+
 .login-center-box .banner-login-content {
   width: 100%;
 }
+
 .login-center-box input {
   width: 100%;
   box-sizing: border-box;
 }
 
+/* Employees module */
+.employees-module {
+  padding: 0 0 48px;
+}
 
+.employees-card {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(4px);
+  border-radius: 18px;
+  box-shadow: 0 10px 30px rgba(18, 25, 36, 0.08);
+  padding: 24px;
+}
+
+.employees-card.night {
+  background: rgba(18, 25, 36, 0.82);
+}
+
+.employees-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.employees-title {
+  margin: 0 0 4px;
+}
+
+.employees-subtitle {
+  margin: 0;
+  color: #6b7280;
+}
+
+.employees-size-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.employees-size-box select {
+  min-width: 110px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #d4d8de;
+  background: #fff;
+}
+
+.employees-table {
+  overflow-x: auto;
+}
+
+.employees-table th {
+  background: #fd5523;
+  color: #fff;
+  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.employees-table td {
+  padding: 12px;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.employees-sort-button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 12px;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+
+.employees-sort-indicator {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.employees-empty-cell {
+  text-align: center;
+  padding: 28px !important;
+}
+
+.employees-pagination {
+  margin-top: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.employees-pagination--single {
+  justify-content: flex-end;
+}
+
+.employees-pagination__summary {
+  display: flex;
+  gap: 16px;
+  color: #4b5563;
+}
+
+.employees-pagination__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.employees-pagination__actions button,
+.employees-pagination__pages button {
+  border: none;
+  border-radius: 999px;
+  padding: 8px 14px;
+  cursor: pointer;
+  background: #eef2f7;
+}
+
+.employees-pagination__actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.employees-pagination__pages {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.employees-pagination__pages button.active {
+  background: #fd5523;
+  color: #fff;
+}
+
+.employees-alert-error {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #fee2e2;
+  color: #991b1b;
+}

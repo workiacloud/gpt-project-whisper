@@ -5,16 +5,15 @@ import cloud.workia.sync.model.TableMeta;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.RowMapper;
-import org.springframework.stereotype.Service;
-
 import java.sql.PreparedStatement;
 import java.sql.Timestamp;
 import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Service;
 
 @Service
 public class SupabaseService {
@@ -48,50 +47,42 @@ public class SupabaseService {
     }
 
     public List<Map<String, Object>> loadTableRecords(String tableName) {
-        String sql = "select id, status, metadata from public." + tableName + " order by id";
+        String sql = "select id, metadata from public." + tableName + " order by id";
         return jdbcTemplate.query(sql, recordMapper());
     }
 
-    public void applyRecord(
-            String tableName,
-            Long id,
-            Map<String, Object> metadata,
-            Integer status,
-            OperationType operationType
-    ) {
+    public void applyRecord(String tableName, Long id, Map<String, Object> metadata, OperationType operationType) {
         if (operationType == OperationType.INSERT) {
-            String sql = "insert into public." + tableName + " (id, status, metadata) values (?, ?, ?::jsonb)";
+            String sql = "insert into public." + tableName + " (id, metadata) values (?, ?::jsonb)";
             jdbcTemplate.update(connection -> {
                 PreparedStatement ps = connection.prepareStatement(sql);
                 ps.setLong(1, id);
-                ps.setInt(2, status == null ? 1 : status);
-                ps.setString(3, writeJson(metadata));
+                ps.setString(2, writeJson(metadata));
                 return ps;
             });
             return;
         }
 
-        String sql = "update public." + tableName + " set status = ?, metadata = ?::jsonb where id = ?";
+        String sql = "update public." + tableName + " set metadata = ?::jsonb where id = ?";
         jdbcTemplate.update(connection -> {
             PreparedStatement ps = connection.prepareStatement(sql);
-            ps.setInt(1, status == null ? 1 : status);
-            ps.setString(2, writeJson(metadata));
-            ps.setLong(3, id);
+            ps.setString(1, writeJson(metadata));
+            ps.setLong(2, id);
             return ps;
         });
     }
 
     public Map<Long, String> loadNameLookup(String tableName) {
-        String sql = "select id, status, metadata from public." + tableName + " order by id";
+        String sql = "select id, metadata from public." + tableName + " order by id";
         List<Map<String, Object>> rows = jdbcTemplate.query(sql, recordMapper());
 
         Map<Long, String> lookup = new HashMap<>();
         for (Map<String, Object> row : rows) {
             Long id = ((Number) row.get("id")).longValue();
-            Integer status = row.get("status") == null ? 1 : ((Number) row.get("status")).intValue();
-
-            if (status == 1) {
-                Map<String, Object> metadata = castMap(row.get("metadata"));
+            Map<String, Object> metadata = castMap(row.get("metadata"));
+            Object status = metadata.get("status");
+            boolean visible = status == null || "1".equals(String.valueOf(status)) || Integer.valueOf(1).equals(status);
+            if (visible) {
                 lookup.put(id, String.valueOf(metadata.getOrDefault("name", id.toString())));
             }
         }
@@ -128,7 +119,6 @@ public class SupabaseService {
 
         String sql = "select metadata from public.system_user where id = ?";
         List<String> rows = jdbcTemplate.query(sql, (rs, rowNum) -> rs.getString("metadata"), whoId);
-
         if (rows.isEmpty()) {
             return null;
         }
@@ -156,8 +146,7 @@ public class SupabaseService {
             values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
             """;
 
-        jdbcTemplate.update(
-                sql,
+        jdbcTemplate.update(sql,
                 id,
                 Timestamp.from(eventTime.toInstant()),
                 who,
@@ -176,7 +165,6 @@ public class SupabaseService {
         return (rs, rowNum) -> {
             Map<String, Object> row = new HashMap<>();
             row.put("id", rs.getLong("id"));
-            row.put("status", rs.getInt("status"));
             row.put("metadata", parseJson(rs.getString("metadata")));
             return row;
         };

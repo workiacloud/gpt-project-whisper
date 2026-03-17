@@ -8,15 +8,14 @@ import cloud.workia.sync.model.TableMeta;
 import cloud.workia.sync.properties.AppProperties;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Service;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
 
 @Service
 public class TransactionQueueService {
@@ -66,18 +65,11 @@ public class TransactionQueueService {
         }
 
         Map<String, Object> currentRaw = resolveCurrentRaw(tableName, request.getId());
-        Integer currentStatus = resolveCurrentStatus(tableName, request.getId());
-
         if (request.getOperationType() == OperationType.INSERT && currentRaw != null) {
-            throw new IllegalArgumentException(
-                    "Record already exists for insert, table: " + tableName + ", id: " + request.getId()
-            );
+            throw new IllegalArgumentException("Record already exists for insert, table: " + tableName + ", id: " + request.getId());
         }
-
         if (request.getOperationType() != OperationType.INSERT && currentRaw == null) {
-            throw new IllegalArgumentException(
-                    "Record not found in cache for table: " + tableName + ", id: " + request.getId()
-            );
+            throw new IllegalArgumentException("Record not found in cache for table: " + tableName + ", id: " + request.getId());
         }
 
         validateVersion(request, currentRaw);
@@ -85,19 +77,16 @@ public class TransactionQueueService {
         Map<String, Object> before = currentRaw == null ? new HashMap<>() : deepCopy(currentRaw);
         Map<String, Object> after = currentRaw == null ? new HashMap<>() : deepCopy(currentRaw);
 
-        Integer beforeStatus = currentStatus;
-        Integer afterStatus;
-
         if (request.getOperationType() == OperationType.DELETE) {
-            afterStatus = 0;
+            after.put("status", 0);
+            after.put("version", nextVersion(currentRaw));
         } else {
             after.putAll(request.getChanges());
             if (request.getOperationType() == OperationType.INSERT) {
+                after.putIfAbsent("status", 1);
                 after.put("version", 1L);
-                afterStatus = 1;
             } else {
                 after.put("version", nextVersion(currentRaw));
-                afterStatus = beforeStatus == null ? 1 : beforeStatus;
             }
         }
 
@@ -108,8 +97,6 @@ public class TransactionQueueService {
         operation.setId(request.getId());
         operation.setWhoId(request.getWhoId());
         operation.setOperationType(request.getOperationType());
-        operation.setBeforeStatus(beforeStatus);
-        operation.setAfterStatus(afterStatus);
         operation.setBeforeRaw(before);
         operation.setAfterRaw(after);
 
@@ -151,34 +138,23 @@ public class TransactionQueueService {
             mergeAuditIds(operation.getAfterRaw(), auditIds);
 
             OperationType persistenceOperation =
-                    operation.getOperationType() == OperationType.DELETE
-                            ? OperationType.UPDATE
-                            : operation.getOperationType();
+                    operation.getOperationType() == OperationType.DELETE ? OperationType.UPDATE : operation.getOperationType();
 
             supabaseService.applyRecord(
                     operation.getTableName(),
                     operation.getId(),
                     operation.getAfterRaw(),
-                    operation.getAfterStatus(),
                     persistenceOperation
             );
 
-            if (operation.getAfterStatus() != null && operation.getAfterStatus() == 0) {
+            if (operation.getOperationType() == OperationType.DELETE) {
                 Long deletedVersion = extractVersion(operation.getAfterRaw());
                 cacheService.removeRecord(operation.getTableName(), operation.getId());
-                webSocketBroadcastService.broadcastDelete(
-                        operation.getTableName(),
-                        operation.getId(),
-                        deletedVersion
-                );
+                webSocketBroadcastService.broadcastDelete(operation.getTableName(), operation.getId(), deletedVersion);
                 continue;
             }
 
-            cacheService.saveRawRecord(
-                    operation.getTableName(),
-                    operation.getId(),
-                    operation.getAfterRaw()
-            );
+            cacheService.saveRawRecord(operation.getTableName(), operation.getId(), operation.getAfterRaw());
 
             RecordView resolved = referenceResolverService.buildResolvedView(
                     operation.getTableName(),
@@ -187,11 +163,7 @@ public class TransactionQueueService {
                     tableMeta
             );
             cacheService.saveResolvedRecord(operation.getTableName(), operation.getId(), resolved);
-            webSocketBroadcastService.broadcastUpsert(
-                    operation.getTableName(),
-                    operation.getId(),
-                    resolved
-            );
+            webSocketBroadcastService.broadcastUpsert(operation.getTableName(), operation.getId(), resolved);
         }
 
         referenceResolverService.refreshLookup(tableName);
@@ -212,7 +184,6 @@ public class TransactionQueueService {
             }
 
             existing.setAfterRaw(deepCopy(current.getAfterRaw()));
-            existing.setAfterStatus(current.getAfterStatus());
             existing.setWhoId(current.getWhoId());
 
             if (existing.getOperationType() == OperationType.INSERT) {
@@ -238,19 +209,6 @@ public class TransactionQueueService {
         return cacheService.getRawRecord(tableName, id);
     }
 
-    private Integer resolveCurrentStatus(String tableName, Long id) {
-        List<PendingOperation> pending = queueByTable.getOrDefault(tableName, Collections.emptyList());
-        for (int i = pending.size() - 1; i >= 0; i--) {
-            PendingOperation operation = pending.get(i);
-            if (operation.getId().equals(id)) {
-                return operation.getAfterStatus();
-            }
-        }
-
-        Map<String, Object> currentRaw = cacheService.getRawRecord(tableName, id);
-        return currentRaw == null ? null : 1;
-    }
-
     private void validateVersion(ChangeRequest request, Map<String, Object> currentRaw) {
         if (request.getOperationType() == OperationType.INSERT) {
             return;
@@ -259,10 +217,10 @@ public class TransactionQueueService {
         Long currentVersion = extractVersion(currentRaw);
         if (!currentVersion.equals(request.getExpectedVersion())) {
             throw new IllegalStateException(
-                    "Version conflict for table " + request.getTableName()
-                            + ", id " + request.getId()
-                            + ". Expected version " + request.getExpectedVersion()
-                            + " but current version is " + currentVersion
+                    "Version conflict for table " + request.getTableName() +
+                            ", id " + request.getId() +
+                            ". Expected version " + request.getExpectedVersion() +
+                            " but current version is " + currentVersion
             );
         }
     }
@@ -285,8 +243,7 @@ public class TransactionQueueService {
 
     @SuppressWarnings("unchecked")
     private void mergeAuditIds(Map<String, Object> metadata, Map<String, Long> auditIds) {
-        Map<String, Object> audits =
-                (Map<String, Object>) metadata.computeIfAbsent("audits", key -> new HashMap<>());
+        Map<String, Object> audits = (Map<String, Object>) metadata.computeIfAbsent("audits", key -> new HashMap<>());
         auditIds.forEach(audits::put);
     }
 
@@ -305,7 +262,6 @@ public class TransactionQueueService {
 
     private Map<String, Object> deepCopy(Map<String, Object> source) {
         Map<String, Object> copy = new HashMap<>();
-
         for (Map.Entry<String, Object> entry : source.entrySet()) {
             if (entry.getValue() instanceof Map<?, ?> nestedMap) {
                 Map<String, Object> nestedCopy = new HashMap<>();
@@ -317,7 +273,6 @@ public class TransactionQueueService {
                 copy.put(entry.getKey(), entry.getValue());
             }
         }
-
         return copy;
     }
 }

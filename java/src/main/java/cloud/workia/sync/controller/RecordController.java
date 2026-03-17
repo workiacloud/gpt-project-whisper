@@ -8,11 +8,13 @@ import cloud.workia.sync.model.RecordDetailResponse;
 import cloud.workia.sync.model.RecordListItemResponse;
 import cloud.workia.sync.service.QueryService;
 import cloud.workia.sync.service.TransactionQueueService;
+import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/tables")
+@CrossOrigin(origins = "*")
 public class RecordController {
 
     private final QueryService queryService;
@@ -28,17 +30,19 @@ public class RecordController {
 
     @GetMapping("/{tableName}")
     public ResponseEntity<PagedResponse<RecordListItemResponse>> getAll(
-            @PathVariable String tableName,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "50") int size
+            @PathVariable("tableName") String tableName,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size,
+            @RequestParam(name = "sortBy", defaultValue = "id") String sortBy,
+            @RequestParam(name = "sortDir", defaultValue = "asc") String sortDir
     ) {
-        return ResponseEntity.ok(queryService.findAll(tableName, page, size));
+        return ResponseEntity.ok(queryService.findAll(tableName, page, size, sortBy, sortDir));
     }
 
     @GetMapping("/{tableName}/{id}")
     public ResponseEntity<RecordDetailResponse> getById(
-            @PathVariable String tableName,
-            @PathVariable Long id
+            @PathVariable("tableName") String tableName,
+            @PathVariable("id") Long id
     ) {
         RecordDetailResponse record = queryService.findById(tableName, id);
         if (record == null) {
@@ -48,19 +52,17 @@ public class RecordController {
     }
 
     @GetMapping("/{tableName}/search")
-    public ResponseEntity<PagedResponse<RecordListItemResponse>> searchByField(
-            @PathVariable String tableName,
-            @RequestParam String field,
-            @RequestParam String value,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "50") int size
+    public ResponseEntity<List<RecordListItemResponse>> searchByField(
+            @PathVariable("tableName") String tableName,
+            @RequestParam(name = "field") String field,
+            @RequestParam(name = "value") String value
     ) {
-        return ResponseEntity.ok(queryService.findByFieldValue(tableName, field, value, page, size));
+        return ResponseEntity.ok(queryService.findByFieldValue(tableName, field, value));
     }
 
     @PostMapping("/{tableName}/insert")
     public ResponseEntity<ChangeResponse> insert(
-            @PathVariable String tableName,
+            @PathVariable("tableName") String tableName,
             @RequestBody ChangeRequest request
     ) {
         request.setTableName(tableName);
@@ -71,7 +73,7 @@ public class RecordController {
 
     @PostMapping("/{tableName}/update")
     public ResponseEntity<ChangeResponse> update(
-            @PathVariable String tableName,
+            @PathVariable("tableName") String tableName,
             @RequestBody ChangeRequest request
     ) {
         request.setTableName(tableName);
@@ -82,10 +84,10 @@ public class RecordController {
 
     @PostMapping("/{tableName}/delete/{id}")
     public ResponseEntity<ChangeResponse> delete(
-            @PathVariable String tableName,
-            @PathVariable Long id,
-            @RequestParam Long expectedVersion,
-            @RequestParam(required = false) Long whoId
+            @PathVariable("tableName") String tableName,
+            @PathVariable("id") Long id,
+            @RequestParam(name = "expectedVersion") Long expectedVersion,
+            @RequestParam(name = "whoId", required = false) Long whoId
     ) {
         ChangeRequest request = new ChangeRequest();
         request.setTableName(tableName);
@@ -93,6 +95,7 @@ public class RecordController {
         request.setWhoId(whoId);
         request.setExpectedVersion(expectedVersion);
         request.setOperationType(OperationType.DELETE);
+
         transactionQueueService.enqueue(request);
         return ResponseEntity.ok(buildResponse(request));
     }
