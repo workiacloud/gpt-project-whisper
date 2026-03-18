@@ -8,7 +8,9 @@ import cloud.workia.sync.model.RecordDetailResponse;
 import cloud.workia.sync.model.RecordListItemResponse;
 import cloud.workia.sync.service.QueryService;
 import cloud.workia.sync.service.TransactionQueueService;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -37,6 +39,26 @@ public class RecordController {
             @RequestParam(name = "sortDir", defaultValue = "asc") String sortDir
     ) {
         return ResponseEntity.ok(queryService.findAll(tableName, page, size, sortBy, sortDir));
+    }
+
+    @GetMapping("/{tableName}/meta")
+    public ResponseEntity<Map<String, Object>> getMeta(
+            @PathVariable("tableName") String tableName
+    ) {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("tableName", tableName);
+        response.put("headers", queryService.getHeaders(tableName));
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{tableName}/autocomplete")
+    public ResponseEntity<List<String>> autocomplete(
+            @PathVariable("tableName") String tableName,
+            @RequestParam(name = "field") String field,
+            @RequestParam(name = "q") String query,
+            @RequestParam(name = "limit", defaultValue = "8") int limit
+    ) {
+        return ResponseEntity.ok(queryService.autocomplete(tableName, field, query, limit));
     }
 
     @GetMapping("/{tableName}/{id}")

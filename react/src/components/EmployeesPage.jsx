@@ -1,111 +1,282 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import EmployeesTable from './EmployeesTable'
-import EmployeesPagination from './EmployeesPagination'
-import { getEmployeesPage } from '../services/employeeApi'
+import { useEffect, useRef, useState } from 'react'
 
-export default function EmployeesPage({ isNightMode }) {
-  const [page, setPage] = useState(0)
-  const [size, setSize] = useState(10)
-  const [sortBy, setSortBy] = useState('id')
-  const [sortDir, setSortDir] = useState('asc')
-  const [data, setData] = useState({
-    items: [],
-    page: 0,
-    size: 10,
-    totalItems: 0,
-    totalPages: 0,
-    hasNext: false,
-    hasPrevious: false
-  })
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-
-  const loadPage = useCallback(async () => {
-    setLoading(true)
-    setError('')
-
-    try {
-      const response = await getEmployeesPage(page, size, sortBy, sortDir)
-      setData(response)
-    } catch (err) {
-      setError(err.message || 'Failed to load employees')
-    } finally {
-      setLoading(false)
-    }
-  }, [page, size, sortBy, sortDir])
+export default function EmployeesTable({
+  columns,
+  columnLabels,
+  rows,
+  loading,
+  sortBy,
+  sortDir,
+  onSort,
+  onSaveCell,
+  onAutocomplete
+}) {
+  const [drafts, setDrafts] = useState({})
+  const [saving, setSaving] = useState({})
+  const [errors, setErrors] = useState({})
+  const [suggestions, setSuggestions] = useState({})
+  const [openSuggestionKey, setOpenSuggestionKey] = useState(null)
+  const debounceTimersRef = useRef({})
 
   useEffect(() => {
-    loadPage()
-  }, [loadPage])
-
-  const columns = useMemo(() => {
-    const first = data.items?.[0]
-    const keys = first?.data ? Object.keys(first.data) : []
-    return ['id', ...keys, 'version']
-  }, [data.items])
-
-  const handleSort = (column) => {
-    setPage(0)
-    if (column === sortBy) {
-      setSortDir((current) => (current === 'asc' ? 'desc' : 'asc'))
-      return
+    const nextDrafts = {}
+    for (const row of rows) {
+      for (const column of columns) {
+        nextDrafts[cellKey(row.id, column)] = row.data?.[column] ?? ''
+      }
     }
-    setSortBy(column)
-    setSortDir('asc')
+    setDrafts(nextDrafts)
+  }, [rows, columns])
+
+  useEffect(() => {
+    return () => {
+      Object.values(debounceTimersRef.current).forEach((timerId) => {
+        clearTimeout(timerId)
+      })
+    }
+  }, [])
+
+  const renderSortIndicator = (column) => {
+    if (column !== sortBy) {
+      return '↕'
+    }
+    return sortDir === 'asc' ? '↑' : '↓'
+  }
+
+  const handleChange = (row, column, value) => {
+    const key = cellKey(row.id, column)
+
+    setDrafts((prev) => ({
+      ...prev,
+      [key]: value
+    }))
+
+    setErrors((prev) => ({
+      ...prev,
+      [key]: ''
+    }))
+
+    if (debounceTimersRef.current[key]) {
+      clearTimeout(debounceTimersRef.current[key])
+    }
+
+    debounceTimersRef.current[key] = setTimeout(async () => {
+      try {
+        const items = await onAutocomplete(column, value)
+        setSuggestions((prev) => ({
+          ...prev,
+          [key]: items || []
+        }))
+      } catch {
+        setSuggestions((prev) => ({
+          ...prev,
+          [key]: []
+        }))
+      }
+    }, 180)
+  }
+
+  const handleBlur = async (row, column) => {
+    const key = cellKey(row.id, column)
+    const originalValue = row.data?.[column] ?? ''
+    const nextValue = drafts[key] ?? ''
+
+    window.setTimeout(async () => {
+      if (openSuggestionKey === key) {
+        return
+      }
+
+      setSuggestions((prev) => ({
+        ...prev,
+        [key]: []
+      }))
+
+      if (String(originalValue) === String(nextValue)) {
+        return
+      }
+
+      setSaving((prev) => ({
+        ...prev,
+        [key]: true
+      }))
+
+      setErrors((prev) => ({
+        ...prev,
+        [key]: ''
+      }))
+
+      try {
+        await onSaveCell({
+          rowId: row.id,
+          rowVersion: row.version,
+          field: column,
+          value: nextValue
+        })
+      } catch (error) {
+        setDrafts((prev) => ({
+          ...prev,
+          [key]: originalValue
+        }))
+
+        setErrors((prev) => ({
+          ...prev,
+          [key]: error.message || 'No se pudo guardar'
+        }))
+      } finally {
+        setSaving((prev) => ({
+          ...prev,
+          [key]: false
+        }))
+      }
+    }, 120)
+  }
+
+  const handleSuggestionMouseDown = async (event, row, column, suggestion) => {
+    event.preventDefault()
+
+    const key = cellKey(row.id, column)
+
+    setOpenSuggestionKey(key)
+
+    setDrafts((prev) => ({
+      ...prev,
+      [key]: suggestion
+    }))
+
+    setSuggestions((prev) => ({
+      ...prev,
+      [key]: []
+    }))
+
+    setSaving((prev) => ({
+      ...prev,
+      [key]: true
+    }))
+
+    setErrors((prev) => ({
+      ...prev,
+      [key]: ''
+    }))
+
+    try {
+      await onSaveCell({
+        rowId: row.id,
+        rowVersion: row.version,
+        field: column,
+        value: suggestion
+      })
+    } catch (error) {
+      setDrafts((prev) => ({
+        ...prev,
+        [key]: row.data?.[column] ?? ''
+      }))
+
+      setErrors((prev) => ({
+        ...prev,
+        [key]: error.message || 'No se pudo guardar'
+      }))
+    } finally {
+      setSaving((prev) => ({
+        ...prev,
+        [key]: false
+      }))
+      setOpenSuggestionKey(null)
+    }
   }
 
   return (
-    <section className="employees-module">
-      <div className="container">
-        <div className={`employees-card ${isNightMode ? 'night' : ''}`}>
-          <div className="employees-toolbar">
-            <div>
-              <h3 className="employees-title">Employee</h3>
-              <p className="employees-subtitle">
-                Datos resueltos desde cache Valkey.
-              </p>
-            </div>
+    <div className="employees-table captura-table">
+      <table>
+        <thead>
+          <tr>
+            {columns.map((column) => (
+              <th key={column}>
+                <button
+                  type="button"
+                  className="employees-sort-button"
+                  onClick={() => onSort(column)}
+                >
+                  <span>{columnLabels?.[column] || column}</span>
+                  <span className="employees-sort-indicator">
+                    {renderSortIndicator(column)}
+                  </span>
+                </button>
+              </th>
+            ))}
+          </tr>
+        </thead>
 
-            <div className="employees-size-box">
-              <label htmlFor="employees-page-size">Filas por página</label>
-              <select
-                id="employees-page-size"
-                value={size}
-                onChange={(e) => {
-                  setPage(0)
-                  setSize(Number(e.target.value))
-                }}
-              >
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-              </select>
-            </div>
-          </div>
+        <tbody>
+          {loading ? (
+            <tr>
+              <td colSpan={columns.length || 1} className="employees-empty-cell">
+                Loading...
+              </td>
+            </tr>
+          ) : rows.length === 0 ? (
+            <tr>
+              <td colSpan={columns.length || 1} className="employees-empty-cell">
+                No employees found
+              </td>
+            </tr>
+          ) : (
+            rows.map((row) => (
+              <tr key={row.id}>
+                {columns.map((column) => {
+                  const key = cellKey(row.id, column)
+                  const value = drafts[key] ?? row.data?.[column] ?? ''
+                  const cellSuggestions = suggestions[key] || []
+                  const isSaving = Boolean(saving[key])
+                  const error = errors[key]
 
-          {error && <div className="employees-alert-error">{error}</div>}
+                  return (
+                    <td key={key}>
+                      <div className="employees-editable-cell">
+                        <input
+                          type="text"
+                          value={value}
+                          onFocus={() => setOpenSuggestionKey(key)}
+                          onChange={(e) => handleChange(row, column, e.target.value)}
+                          onBlur={() => handleBlur(row, column)}
+                        />
 
-          <EmployeesTable
-            columns={columns}
-            rows={data.items}
-            loading={loading}
-            sortBy={sortBy}
-            sortDir={sortDir}
-            onSort={handleSort}
-          />
+                        {isSaving && (
+                          <div className="employees-cell-status">Guardando...</div>
+                        )}
 
-          <EmployeesPagination
-            page={data.page}
-            totalPages={data.totalPages}
-            totalItems={data.totalItems}
-            hasNext={data.hasNext}
-            hasPrevious={data.hasPrevious}
-            onPrevious={() => setPage((p) => Math.max(0, p - 1))}
-            onNext={() => setPage((p) => p + 1)}
-            onGoToPage={(nextPage) => setPage(nextPage)}
-          />
-        </div>
-      </div>
-    </section>
+                        {!isSaving && error && (
+                          <div className="employees-cell-error">{error}</div>
+                        )}
+
+                        {openSuggestionKey === key && cellSuggestions.length > 0 && (
+                          <div className="employees-suggestions">
+                            {cellSuggestions.map((suggestion) => (
+                              <button
+                                key={`${key}-${suggestion}`}
+                                type="button"
+                                className="employees-suggestion-item"
+                                onMouseDown={(event) =>
+                                  handleSuggestionMouseDown(event, row, column, suggestion)
+                                }
+                              >
+                                {suggestion}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  )
+                })}
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
   )
+}
+
+function cellKey(rowId, column) {
+  return `${rowId}:${column}`
 }

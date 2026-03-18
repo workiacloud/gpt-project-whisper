@@ -10,7 +10,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -50,6 +53,14 @@ public class CacheService {
                     e
             );
         }
+    }
+
+    public Map<String, String> getTableHeaders(String tableName) {
+        return extractStringMap(tableName, "headers");
+    }
+
+    public Map<String, String> getTableKeys(String tableName) {
+        return extractStringMap(tableName, "keys");
     }
 
     public void saveRawRecord(String tableName, Long id, Map<String, Object> rawMetadata) {
@@ -115,31 +126,17 @@ public class CacheService {
             }
         }
 
-        records.sort(Comparator.comparing(RecordView::getId));
+        records.sort(Comparator.comparing(
+                RecordView::getId,
+                Comparator.nullsLast(Long::compareTo)
+        ));
+
         return records;
     }
 
     public long countResolvedRecords(String tableName) {
         Long size = redisTemplate.opsForSet().size(activeIdsKey(tableName));
         return size == null ? 0L : size;
-    }
-
-    public List<RecordView> getResolvedRecordsPage(String tableName, int page, int size) {
-        List<RecordView> all = getAllResolvedRecords(tableName);
-        if (all.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        int safePage = Math.max(page, 0);
-        int safeSize = Math.max(size, 1);
-
-        int fromIndex = safePage * safeSize;
-        if (fromIndex >= all.size()) {
-            return Collections.emptyList();
-        }
-
-        int toIndex = Math.min(fromIndex + safeSize, all.size());
-        return all.subList(fromIndex, toIndex);
     }
 
     public List<RecordView> getResolvedRecordsByIndexedField(String tableName, String field, String value) {
@@ -156,8 +153,72 @@ public class CacheService {
             }
         }
 
-        results.sort(Comparator.comparing(RecordView::getId));
+        results.sort(Comparator.comparing(
+                RecordView::getId,
+                Comparator.nullsLast(Long::compareTo)
+        ));
+
         return results;
+    }
+
+    public List<String> autocomplete(String tableName, String field, String query, int limit) {
+        if (query == null || query.isBlank()) {
+            return Collections.emptyList();
+        }
+
+        String key = AutocompleteService.autocompleteKey(tableName, field);
+        Set<String> entries = redisTemplate.opsForZSet().range(key, 0, -1);
+        if (entries == null || entries.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        String normalizedQuery = normalizeAutocompleteValue(query);
+        LinkedHashSet<String> suggestions = new LinkedHashSet<>();
+
+        for (String entry : entries) {
+            if (entry == null) {
+                continue;
+            }
+
+            int pipeIndex = entry.lastIndexOf('|');
+            if (pipeIndex <= 0 || pipeIndex >= entry.length() - 1) {
+                continue;
+            }
+
+            String token = entry.substring(0, pipeIndex);
+            if (!token.endsWith("*")) {
+                continue;
+            }
+
+            String normalizedFullValue = token.substring(0, token.length() - 1);
+            if (!normalizedFullValue.startsWith(normalizedQuery)) {
+                continue;
+            }
+
+            Long id;
+            try {
+                id = Long.valueOf(entry.substring(pipeIndex + 1));
+            } catch (NumberFormatException ex) {
+                continue;
+            }
+
+            RecordView record = getResolvedRecord(tableName, id);
+            if (record == null || record.getData() == null) {
+                continue;
+            }
+
+            Object realValue = record.getData().get(field);
+            if (realValue == null) {
+                continue;
+            }
+
+            suggestions.add(String.valueOf(realValue));
+            if (suggestions.size() >= Math.max(1, limit)) {
+                break;
+            }
+        }
+
+        return new ArrayList<>(suggestions);
     }
 
     public void removeRecord(String tableName, Long id) {
@@ -251,6 +312,54 @@ public class CacheService {
     private List<String> searchableFields(String tableName) {
         List<String> fields = appProperties.getCache().getSearchableFields().get(tableName);
         return fields == null ? Collections.emptyList() : fields;
+    }
+
+    private Map<String, String> extractStringMap(String tableName, String propertyName) {
+        TableMeta tableMeta = getTableMeta(tableName);
+        if (tableMeta == null) {
+            return Collections.emptyMap();
+        }
+
+        Map<String, Object> metaMap = objectMapper.convertValue(
+                tableMeta,
+                new TypeReference<>() {}
+        );
+
+        Object direct = metaMap.get(propertyName);
+        if (direct instanceof Map<?, ?> directMap) {
+            return toStringMap(directMap);
+        }
+
+        Object metadata = metaMap.get("metadata");
+        if (metadata instanceof Map<?, ?> metadataMap) {
+            Object nested = metadataMap.get(propertyName);
+            if (nested instanceof Map<?, ?> nestedMap) {
+                return toStringMap(nestedMap);
+            }
+        }
+
+        return Collections.emptyMap();
+    }
+
+    private Map<String, String> toStringMap(Map<?, ?> source) {
+        Map<String, String> result = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : source.entrySet()) {
+            if (entry.getKey() == null) {
+                continue;
+            }
+            result.put(
+                    String.valueOf(entry.getKey()),
+                    entry.getValue() == null ? "" : String.valueOf(entry.getValue())
+            );
+        }
+        return result;
+    }
+
+    private String normalizeAutocompleteValue(String value) {
+        return value
+                .trim()
+                .toLowerCase(Locale.ROOT)
+                .replaceAll("\\s+", " ");
     }
 
     private void writeJson(String key, Object value) {
